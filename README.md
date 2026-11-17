@@ -4,7 +4,7 @@ A [Thurm](https://github.com/nklmilojevic/thurm) plugin that shows how much of y
 
 ![Rings for Claude Code, Codex and a custom Grok tool, in the bottom right corner of a Thurm window](media/dock.png)
 
-Each tool gets a ring with its icon. The ring fills with the highest share used of its limits, rounded down like Claude Code's `/usage`: white below 50%, orange from 50%, red from 80%. Hover a ring for each limit, with a bar and when it resets; click it to refresh. A "!" means the tool could not be read, and its popover says why.
+Each tool gets a ring with its icon. The ring fills with the highest share used of its limits, rounded down like Claude Code's `/usage`: white below 50%, orange from 50%, red from 80%. Hover a ring for each limit, with a bar and when it resets; click the ring to refresh, or right click the dock for its settings. A "!" means the tool could not be read, and its popover says why.
 
 The plugin draws everything itself (the rings are images it renders); Thurm only gives it a place in the window ([plugin views](https://docs.thurm.rs/plugins/#views-in-the-window)). On a Thurm without plugin views, `Cmd+Shift+U` opens the limits in a floating card instead.
 
@@ -16,13 +16,16 @@ thurm plugin install https://github.com/kavanpancholi/thurm-usage-rings
 
 ## Settings
 
-In `~/.config/thurm/config.toml`:
+Click the sliders icon at the start of the dock to show or hide a tool, add one with its own command, remove one, or move the dock to another corner. Those choices go to `prefs.json` in the plugin's folder and win over the config file.
+
+Or set them in `~/.config/thurm/config.toml`:
 
 ```toml
 [plugins.settings.usage-rings]
 slot = "window.bottom_trailing"   # or window.bottom_leading, window.top_trailing
 tools = ["claude", "codex"]       # which built-in tools to show, in this order
 every = 300                       # seconds between refreshes (at least 60)
+menu = true                       # false hides the sliders icon
 ```
 
 `thurm reload` applies a change at once.

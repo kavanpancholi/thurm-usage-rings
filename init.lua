@@ -1,9 +1,38 @@
 local settings = thurm.settings or {}
 local python = settings.python or "/usr/bin/python3"
-local slot = settings.slot or "window.bottom_trailing"
 local every = math.max(60, tonumber(settings.every) or 300)
 local key = settings.key == nil and "cmd+shift+u" or settings.key
 local USAGE = thurm.dir .. "/usage.py"
+local PREFS = thurm.dir .. "/prefs.json"
+
+local SLOTS = {
+  { id = "window.bottom_trailing", title = "Bottom right" },
+  { id = "window.bottom_leading", title = "Bottom left" },
+  { id = "window.top_trailing", title = "Top right" },
+}
+
+-- What the settings menu changed, over `[plugins.settings.usage-rings]`.
+local prefs = {}
+do
+  local f = io.open(PREFS)
+  if f then
+    local ok, data = pcall(thurm.json.decode, f:read("a"))
+    f:close()
+    if ok and type(data) == "table" then prefs = data end
+  end
+end
+
+local function save()
+  local f = assert(io.open(PREFS, "w"))
+  f:write(thurm.json.encode(prefs))
+  f:close()
+end
+
+local function pref(k, default)
+  if prefs[k] ~= nil then return prefs[k] end
+  if settings[k] ~= nil then return settings[k] end
+  return default
+end
 
 local BUILTIN = {
   claude = { name = "Claude Code", symbol = "asterisk" },
@@ -18,7 +47,7 @@ end
 -- The tools to show, in order: built-in ones by name, then `custom` ones with their own command.
 local function tools()
   local list = {}
-  for _, name in ipairs(settings.tools or { "claude", "codex" }) do
+  for _, name in ipairs(pref("tools", { "claude", "codex" })) do
     local t = BUILTIN[name]
     if t then
       list[#list + 1] = {
@@ -26,7 +55,8 @@ local function tools()
       }
     end
   end
-  for i, c in ipairs(settings.custom or {}) do
+  for i, c in ipairs(pref("custom", {})) do
+    if type(c.command) == "string" then c = { name = c.name, symbol = c.symbol, command = { "/bin/sh", "-c", c.command } } end
     if type(c.command) == "table" and c.name then
       list[#list + 1] = {
         id = "custom" .. i, name = c.name, symbol = c.symbol or "sparkles",
@@ -103,7 +133,7 @@ local function popover(tool, report)
       text(resets(w.resets_at), 11, nil, "secondary"),
     } }
   end
-  rows[#rows + 1] = text("Click to refresh.", 11, nil, "secondary")
+  rows[#rows + 1] = text("Click the ring to refresh.", 11, nil, "secondary")
   return { type = "column", spacing = 10, width = 260, children = rows }
 end
 
@@ -127,6 +157,68 @@ local function item(tool, report)
   }
 end
 
+local function copy(list)
+  local out = {}
+  for _, v in ipairs(list) do out[#out + 1] = v end
+  return out
+end
+
+-- The settings, as menu items: `args` is what `usage.option` gets; an empty item is a separator.
+local function options()
+  local shown = {}
+  for _, name in ipairs(pref("tools", { "claude", "codex" })) do shown[name] = true end
+  local list = {}
+  for _, name in ipairs({ "claude", "codex" }) do
+    list[#list + 1] = { title = BUILTIN[name].name, checked = shown[name] == true, args = { toggle = name } }
+  end
+  for i, c in ipairs(pref("custom", {})) do
+    list[#list + 1] = { title = "Remove " .. tostring(c.name), args = { remove = i } }
+  end
+  list[#list + 1] = { title = "Add a Tool…", args = { add = true } }
+  list[#list + 1] = {}
+  local here = pref("slot", "window.bottom_trailing")
+  for _, s in ipairs(SLOTS) do
+    list[#list + 1] = { title = s.title, checked = s.id == here, args = { slot = s.id } }
+  end
+  list[#list + 1] = {}
+  list[#list + 1] = { title = "Refresh Now", args = {} }
+  return list
+end
+
+local function apply(args)
+  if args.toggle then
+    local shown = {}
+    for _, n in ipairs(pref("tools", { "claude", "codex" })) do shown[n] = true end
+    shown[args.toggle] = not shown[args.toggle]
+    local list = {}
+    for _, n in ipairs({ "claude", "codex" }) do
+      if shown[n] then list[#list + 1] = n end
+    end
+    prefs.tools = list
+  elseif args.remove then
+    local list = copy(pref("custom", {}))
+    table.remove(list, args.remove)
+    prefs.custom = list
+  elseif args.add then
+    local name = thurm.ui.input{ title = "Tool name", placeholder = "Grok" }
+    if not name or name == "" then return end
+    local command = thurm.ui.input{
+      title = "Command for " .. name,
+      placeholder = 'prints {"windows":[{"label":"Weekly limit","left":66,"resets_at":null}]}',
+    }
+    if not command or command == "" then return end
+    local symbol = thurm.ui.input{ title = "SF Symbol for " .. name, value = "sparkles" }
+    local list = copy(pref("custom", {}))
+    list[#list + 1] = { name = name, command = command, symbol = (symbol ~= "" and symbol) or nil }
+    prefs.custom = list
+  elseif args.slot then
+    prefs.slot = args.slot
+  else
+    return
+  end
+  save()
+end
+
 local mounted = nil
 
 local function draw()
@@ -134,9 +226,20 @@ local function draw()
   for _, tool in ipairs(tools()) do
     children[#children + 1] = item(tool, reports[tool.id] or { problem = "Loading" })
   end
-  local ok, shown = pcall(thurm.ui.mount, slot, "usage", {
+  if pref("menu", true) then
+    table.insert(children, 1, { type = "spacer", width = 1, height = 18, fill = "#ffffff33" })
+    table.insert(children, 1, {
+      type = "icon", symbol = "square.3.layers.3d", size = 14, color = "secondary",
+      tooltip = "Usage rings settings", action = { name = "usage.settings" },
+    })
+  end
+  local menu = {}
+  for _, o in ipairs(options()) do
+    menu[#menu + 1] = o.title and { title = o.title, checked = o.checked, action = { name = "usage.option", args = o.args } } or {}
+  end
+  local ok, shown = pcall(thurm.ui.mount, pref("slot", "window.bottom_trailing"), "usage", {
     type = "row", fill = "#262626e6", border = "#ffffff1f", corner = 29, padding = 10, spacing = 16,
-    children = children,
+    children = children, menu = menu,
   })
   mounted = ok and shown
   return ok
@@ -154,6 +257,36 @@ thurm.action{
   title = "Refresh Usage Limits",
   category = "Usage",
   run = function() refresh() end,
+}
+
+thurm.action{
+  name = "usage.option",
+  title = "Change a Usage Rings Setting",
+  hidden = true,
+  run = function(_, args)
+    apply(args or {})
+    refresh()
+  end,
+}
+
+thurm.action{
+  name = "usage.settings",
+  title = "Usage Rings Settings",
+  category = "Usage",
+  run = function()
+    local items = {}
+    for _, o in ipairs(options()) do
+      if o.title then
+        local title = o.args.toggle and ((o.checked and "Hide " or "Show ") .. o.title)
+          or o.args.slot and ("Move to " .. o.title) or o.title
+        if not (o.args.slot and o.checked) then items[#items + 1] = { title = title, args = o.args } end
+      end
+    end
+    local picked = thurm.ui.pick{ title = "Usage rings", items = items }
+    if not picked then return end
+    apply(picked.args)
+    refresh()
+  end,
 }
 
 -- A Thurm without views (thurm.ui.mount) shows the limits in a floating card instead.
