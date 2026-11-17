@@ -6,6 +6,7 @@
 """
 import base64
 import datetime as dt
+import getpass
 import json
 import math
 import os
@@ -37,18 +38,23 @@ class NoCredentials(Exception):
 
 
 def claude_credentials():
-    keychain = "keychain: not tried"
-    try:
-        out = subprocess.run(
-            ["/usr/bin/security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
-            capture_output=True, timeout=10,
-        )
-        raw = out.stdout.strip() if out.returncode == 0 else b""
+    raw, keychain = b"", "keychain: not tried"
+    for account in (["-a", getpass.getuser()], []):
+        try:
+            out = subprocess.run(
+                ["/usr/bin/security", "find-generic-password", "-s", "Claude Code-credentials", *account, "-w"],
+                capture_output=True, timeout=10,
+            )
+        except subprocess.TimeoutExpired:
+            keychain = "keychain: security timed out"
+            break
+        except OSError:
+            keychain = "keychain: security not found"
+            break
         keychain = "keychain: security exited %d" % out.returncode
-    except subprocess.TimeoutExpired:
-        raw, keychain = b"", "keychain: security timed out"
-    except OSError:
-        raw, keychain = b"", "keychain: security not found"
+        if out.returncode == 0 and out.stdout.strip():
+            raw = out.stdout.strip()
+            break
     if not raw:
         home = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
         try:
@@ -227,10 +233,10 @@ def report(result):
     out = []
     for w in result["windows"]:
         reset = w["resets"]
-        left = 100.0 if reset and reset <= now else 100.0 - w["used"]
+        used = 0 if reset and reset <= now else math.floor(w["used"])
         out.append({
             "label": label(w["minutes"]),
-            "left": round(left),
+            "left": max(0, 100 - used),
             "resets_at": reset.isoformat() if reset and reset > now else None,
         })
     return {"windows": out}
