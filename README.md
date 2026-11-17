@@ -2,7 +2,7 @@
 
 A [Thurm](https://github.com/nklmilojevic/thurm) plugin that shows how much of your AI tools' usage limits you have used as rings in a corner of the window.
 
-![Rings for Claude Code, Codex and a custom Grok tool, in the bottom right corner of a Thurm window](media/dock.png)
+![The dock in the bottom right corner of a Thurm window, with the Claude Code popover: 5-hour and weekly limits, percent used, and when each resets](media/popover.png)
 
 Each tool gets a ring with its icon. The ring fills with the highest share used of its limits, rounded down like Claude Code's `/usage`: white below 50%, orange from 50%, red from 80%. Hover a ring for each limit, with a bar and when it resets; click the ring to refresh, or right click the dock for its settings. A "!" means the tool could not be read, and its popover says why.
 
