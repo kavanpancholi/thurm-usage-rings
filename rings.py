@@ -8,6 +8,7 @@ import select
 import subprocess
 import sys
 import termios
+import textwrap
 import time
 import tty
 import urllib.error
@@ -47,43 +48,51 @@ def window(minutes, used, resets):
     return {"minutes": minutes, "used": max(0.0, min(100.0, float(used))), "resets": resets}
 
 
+class NoCredentials(Exception):
+    pass
+
+
 def claude_credentials():
+    keychain = "keychain: not tried"
     try:
         out = subprocess.run(
             ["/usr/bin/security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
             capture_output=True, timeout=10,
         )
         raw = out.stdout.strip() if out.returncode == 0 else b""
-    except (OSError, subprocess.TimeoutExpired):
-        raw = b""
+        keychain = "keychain: security exited %d" % out.returncode
+    except subprocess.TimeoutExpired:
+        raw, keychain = b"", "keychain: security timed out"
+    except OSError:
+        raw, keychain = b"", "keychain: security not found"
     if not raw:
         home = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
         try:
             with open(os.path.join(home, ".credentials.json"), "rb") as f:
                 raw = f.read().strip()
         except OSError:
-            return None
+            raise NoCredentials(keychain + ", no .credentials.json")
     if not raw.startswith(b"{"):
         try:
             raw = bytes.fromhex(raw.decode())
         except ValueError:
-            return None
+            raise NoCredentials("sign-in is not JSON")
     try:
         oauth = json.loads(raw)["claudeAiOauth"]
     except (ValueError, KeyError, TypeError):
-        return None
+        raise NoCredentials("sign-in has no claudeAiOauth")
     token = oauth.get("accessToken")
     if not token:
-        return None
+        raise NoCredentials("sign-in has no access token")
     expires = oauth.get("expiresAt")
     return token, (expires / 1000 if isinstance(expires, (int, float)) else None)
 
 
 def fetch_claude():
-    creds = claude_credentials()
-    if creds is None:
-        return {"problem": "not signed in to Claude Code"}
-    token, expires = creds
+    try:
+        token, expires = claude_credentials()
+    except NoCredentials as e:
+        return {"problem": str(e)}
     if expires and expires <= time.time():
         return {"problem": "sign-in expired; renews when Claude Code runs"}
     request = urllib.request.Request(
@@ -284,7 +293,8 @@ def draw(reports, updated):
                 line = "%s %3d%% left %s" % (label(w["minutes"]), round(pct), until(w["resets"], now))
                 out.append("\x1b[%d;%dH%s" % (RING_ROWS + 3 + i, x, line[:col_w - 1]))
         else:
-            out.append("\x1b[3;%dH\x1b[2m%s\x1b[0m" % (x, (report.get("problem") or "")[:col_w - 1]))
+            for i, part in enumerate(textwrap.wrap(report.get("problem") or "", col_w - 2)[:RING_ROWS]):
+                out.append("\x1b[%d;%dH\x1b[2m%s\x1b[0m" % (3 + i, x, part))
     footer = "r refresh  q close  %s" % updated.strftime("%H:%M")
     out.append("\x1b[%d;2H\x1b[2m%s\x1b[0m" % (rows, footer[:cols - 2]))
     sys.stdout.write("".join(out))
