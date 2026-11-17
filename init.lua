@@ -137,14 +137,18 @@ local function popover(tool, report)
   return { type = "column", spacing = 10, width = 260, children = rows }
 end
 
+local fetching = {}
+
 local function item(tool, report)
-  local mark = tool.image and { type = "image", image = tool.image, width = 16, height = 16 }
+  local busy = fetching[tool.id]
+  local mark = busy and { type = "icon", symbol = "arrow.clockwise", size = 14, color = "secondary" }
+    or tool.image and { type = "image", image = tool.image, width = 16, height = 16 }
     or { type = "icon", symbol = tool.symbol, size = 14 }
   mark = { type = "stack", width = 38, height = 38, children = { mark } }
   local high = highest(report)
   local children = { mark }
   if high then
-    local png = thurm.exec({ python, USAGE, "ring", tostring(high / 100), color(high) }).stdout
+    local png = thurm.exec({ python, USAGE, "ring", tostring(high / 100), busy and "8e8e93" or color(high) }).stdout
     table.insert(children, 1, { type = "image", image = png, width = 38, height = 38 })
   end
   if report.problem then
@@ -246,10 +250,14 @@ local function draw()
 end
 
 local function refresh()
-  for _, tool in ipairs(tools()) do
-    reports[tool.id] = fetch(tool)
-  end
+  local list = tools()
+  for _, tool in ipairs(list) do fetching[tool.id] = true end
   draw()
+  for _, tool in ipairs(list) do
+    reports[tool.id] = fetch(tool)
+    fetching[tool.id] = nil
+    draw()
+  end
 end
 
 thurm.action{
