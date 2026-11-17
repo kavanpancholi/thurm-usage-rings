@@ -2,6 +2,8 @@
 
 A [Thurm](https://github.com/nklmilojevic/thurm) plugin that shows what is left of your AI tools' usage limits as rings in a corner of the window.
 
+![Rings for Claude Code, Codex and a custom Grok tool, in the bottom right corner of a Thurm window](media/dock.png)
+
 Each tool gets a ring with its icon. The ring shows the lowest share left of its limits: white above 50%, orange above 20%, red below. Hover a ring for each limit, with a bar and when it resets; click it to refresh. A "!" means the tool could not be read, and its popover says why.
 
 The plugin draws everything itself (the rings are images it renders); Thurm only gives it a place in the window ([plugin views](https://docs.thurm.rs/plugins/#views-in-the-window)). On a Thurm without plugin views, `Cmd+Shift+U` opens the limits in a floating card instead.
