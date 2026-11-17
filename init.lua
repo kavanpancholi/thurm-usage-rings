@@ -49,16 +49,17 @@ local function fetch(tool)
   return data
 end
 
-local function lowest(report)
-  local low
+local function highest(report)
+  local high
   for _, w in ipairs(report.windows or {}) do
-    if not low or w.left < low then low = w.left end
+    local used = 100 - w.left
+    if not high or used > high then high = used end
   end
-  return low
+  return high
 end
 
-local function color(left)
-  if left > 50 then return "ffffff" elseif left > 20 then return "ff9f0a" end
+local function color(used)
+  if used < 50 then return "ffffff" elseif used < 80 then return "ff9f0a" end
   return "ff453a"
 end
 
@@ -70,7 +71,7 @@ local function resets(at)
   local now = os.time(os.date("!*t"))
   local secs = math.max(0, utc - now)
   if secs < 3600 then return string.format("Resets in %d minutes", secs // 60) end
-  if secs < 86400 then return string.format("Resets in %d hours", secs // 3600) end
+  if secs < 86400 then return string.format("Resets in %dh %dm", secs // 3600, secs % 3600 // 60) end
   return string.format("Resets in %d days", secs // 86400)
 end
 
@@ -78,25 +79,27 @@ local function text(t, size, weight, c)
   return { type = "text", text = t, size = size, weight = weight, color = c }
 end
 
-local function bar(left, c)
+local function bar(used, c)
   return { type = "stack", align = "leading", children = {
-    { type = "spacer", width = 240, height = 5, fill = "#ffffff33", corner = 3 },
-    { type = "spacer", width = math.max(1, 240 * left / 100), height = 5, fill = c, corner = 3 },
+    { type = "spacer", width = 260, height = 5, fill = "#ffffff33", corner = 3 },
+    { type = "spacer", width = math.max(1, 260 * used / 100), height = 5, fill = c, corner = 3 },
   } }
 end
 
 local function popover(tool, report)
   local rows = { { type = "row", spacing = 24, children = {
-    text(tool.name, 15, "bold"), { type = "spacer" }, text(os.date("%H:%M"), 11, nil, "secondary") } } }
+    text(tool.name, 15, "bold"),
+    { type = "spacer" }, text(os.date("%H:%M"), 11, nil, "secondary") } } }
   if report.problem then
     rows[#rows + 1] = text(tostring(report.problem), 12, nil, "secondary")
   end
   for _, w in ipairs(report.windows or {}) do
-    local c = "#" .. color(w.left)
+    local used = 100 - w.left
+    local c = "#" .. color(used)
     rows[#rows + 1] = { type = "column", spacing = 4, children = {
       { type = "row", children = { text(w.label, 13, "medium"), { type = "spacer" },
-        text(string.format("%d%% left", w.left), 13, "bold", c) } },
-      bar(w.left, c),
+        text(string.format("%d%% used", used), 13, "bold", c) } },
+      bar(used, c),
       text(resets(w.resets_at), 11, nil, "secondary"),
     } }
   end
@@ -108,10 +111,10 @@ local function item(tool, report)
   local mark = tool.image and { type = "image", image = tool.image, width = 16, height = 16 }
     or { type = "icon", symbol = tool.symbol, size = 14 }
   mark = { type = "stack", width = 38, height = 38, children = { mark } }
-  local low = lowest(report)
+  local high = highest(report)
   local children = { mark }
-  if low then
-    local png = thurm.exec({ python, USAGE, "ring", tostring(low / 100), color(low) }).stdout
+  if high then
+    local png = thurm.exec({ python, USAGE, "ring", tostring(high / 100), color(high) }).stdout
     table.insert(children, 1, { type = "image", image = png, width = 38, height = 38 })
   end
   if report.problem then

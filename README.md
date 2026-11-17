@@ -1,10 +1,10 @@
 # thurm-usage-rings
 
-A [Thurm](https://github.com/nklmilojevic/thurm) plugin that shows what is left of your AI tools' usage limits as rings in a corner of the window.
+A [Thurm](https://github.com/nklmilojevic/thurm) plugin that shows how much of your AI tools' usage limits you have used as rings in a corner of the window.
 
 ![Rings for Claude Code, Codex and a custom Grok tool, in the bottom right corner of a Thurm window](media/dock.png)
 
-Each tool gets a ring with its icon. The ring shows the lowest share left of its limits: white above 50%, orange above 20%, red below. Hover a ring for each limit, with a bar and when it resets; click it to refresh. A "!" means the tool could not be read, and its popover says why.
+Each tool gets a ring with its icon. The ring fills with the highest share used of its limits, rounded down like Claude Code's `/usage`: white below 50%, orange from 50%, red from 80%. Hover a ring for each limit, with a bar and when it resets; click it to refresh. A "!" means the tool could not be read, and its popover says why.
 
 The plugin draws everything itself (the rings are images it renders); Thurm only gives it a place in the window ([plugin views](https://docs.thurm.rs/plugins/#views-in-the-window)). On a Thurm without plugin views, `Cmd+Shift+U` opens the limits in a floating card instead.
 
@@ -29,7 +29,7 @@ every = 300                       # seconds between refreshes (at least 60)
 
 ## Built-in tools
 
-- **claude**: Claude Code's sign-in, read the way Thurm's sidebar reads it (the `Claude Code-credentials` keychain item, or `~/.claude/.credentials.json`). The token goes only to `https://api.anthropic.com/api/oauth/usage`.
+- **claude**: Claude Code's sign-in, read the way Thurm's sidebar reads it (the `Claude Code-credentials` keychain item for your macOS user, or `~/.claude/.credentials.json`). The token goes only to `https://api.anthropic.com/api/oauth/usage`.
 - **codex**: the latest `rate_limits` in Codex's session logs (`~/.codex/sessions`). No network.
 
 ## Any other tool
